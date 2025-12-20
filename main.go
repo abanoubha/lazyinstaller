@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"os"
@@ -106,76 +107,6 @@ func executeCommand(template string, pkgName string) {
 		// fmt.Printf("Error executing command: %v\n", err)
 		os.Exit(1)
 	}
-}
-
-func getAllPackages(pmName string, cmdStr string) ([]Package, error) {
-	if cmdStr == "" {
-		return []Package{}, errors.New("command not defined for this package manager")
-	}
-
-	parts := strings.Fields(cmdStr)
-	if len(parts) == 0 {
-		return []Package{}, errors.New("invalid command")
-	}
-
-	head := parts[0]
-	args := parts[1:]
-
-	cmd := exec.Command(head, args...)
-	// Use Output() to capture stdout
-	output, err := cmd.Output()
-	if err != nil {
-		return []Package{}, err
-	}
-
-	return parsePackages(pmName, string(output)), nil
-}
-
-func parsePackages(pmName string, output string) []Package {
-	lines := strings.SplitSeq(output, "\n")
-	var packages []Package
-
-	switch pmName {
-	case "apt":
-		for line := range lines {
-			if strings.HasPrefix(line, "Listing...") {
-				continue
-			}
-			if strings.TrimSpace(line) == "" {
-				continue
-			}
-			// Split by slash first to get name
-			// "adduser/noble,noble,now 3.137ubuntu1 all [installed]"
-			slashSplit := strings.SplitN(line, "/", 2)
-			if len(slashSplit) < 2 {
-				continue
-			}
-			name := slashSplit[0]
-
-			// rest string: "noble,noble,now 3.137ubuntu1 all [installed]"
-			rest := slashSplit[1]
-			fields := strings.Fields(rest)
-			// fields[0] should be "noble,noble,now" (the release info)
-			// fields[1] should be version "3.137ubuntu1"
-			// fields[2] arch
-			// fields[3] [installed]...
-
-			version := ""
-			if len(fields) >= 2 {
-				version = fields[1]
-			}
-
-			packages = append(packages, Package{
-				Name:    name,
-				Manager: "apt",
-				Version: version,
-			})
-		}
-	default:
-		// For now, just return empty logic for others
-	}
-
-	return packages
 }
 
 func main() {
@@ -337,22 +268,32 @@ func main() {
 
 	// Parse packages
 	for _, p := range detectedPMs {
-		c, ok := pm_commands[p.Name]
+		_, ok := pm_commands[p.Name]
 		if !ok {
 			continue
 		}
+	}
 
-		loaded, err := getAllPackages(p.Name, c.ListInstalled)
-		if err != nil {
-			// If verbose, maybe log? For now just ignore failed PM listings
-			continue
-		}
-		// add patches to the list
-		for _, pkg := range loaded {
-			pkg.Manager = p.Name // Ensure manager is set correctly
-			pkgs = append(pkgs, pkg)
+	/////////////////////////////////////////////
+	// 1. Get APT/DPKG packages
+	// Using -W and -f for clean "name,version" output
+	cmdDpkg := exec.Command("dpkg-query", "-W", "-f=${binary:Package},${Version}\n")
+	outDpkg, err := cmdDpkg.Output()
+	if err == nil {
+		scanner := bufio.NewScanner(strings.NewReader(string(outDpkg)))
+		for scanner.Scan() {
+			line := scanner.Text()
+			parts := strings.Split(line, ",")
+			if len(parts) >= 2 {
+				pkgs = append(pkgs, Package{
+					Name:    parts[0],
+					Version: parts[1],
+					Manager: "apt", // dpkg
+				})
+			}
 		}
 	}
+	/////////////////////////////////////////////
 
 	p := tea.NewProgram(initialModel(pkgs), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
