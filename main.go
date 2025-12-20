@@ -13,9 +13,10 @@ import (
 )
 
 type Package struct {
-	Name    string
-	Manager string
-	Version string
+	Name        string
+	Manager     string
+	Version     string
+	IsInstalled bool
 }
 
 func executeCommand(template string, pkgName string) {
@@ -205,9 +206,10 @@ func main() {
 					parts := strings.Split(line, ",")
 					if len(parts) >= 2 {
 						pkgs = append(pkgs, Package{
-							Name:    parts[0],
-							Version: parts[1],
-							Manager: "apt/dpkg",
+							Name:        parts[0],
+							Version:     parts[1],
+							Manager:     "apt/dpkg",
+							IsInstalled: true,
 						})
 					}
 				}
@@ -227,9 +229,10 @@ func main() {
 					fields := strings.Fields(scanner.Text())
 					if len(fields) >= 2 {
 						pkgs = append(pkgs, Package{
-							Name:    fields[0],
-							Version: fields[1],
-							Manager: "snap",
+							Name:        fields[0],
+							Version:     fields[1],
+							Manager:     "snap",
+							IsInstalled: true,
 						})
 					}
 				}
@@ -250,9 +253,10 @@ func main() {
 					fields := strings.Fields(scanner.Text())
 					if len(fields) >= 2 {
 						pkgs = append(pkgs, Package{
-							Name:    fields[0],
-							Version: fields[1],
-							Manager: "flatpak",
+							Name:        fields[0],
+							Version:     fields[1],
+							Manager:     "flatpak",
+							IsInstalled: true,
 						})
 					}
 				}
@@ -272,9 +276,10 @@ func main() {
 					fields := strings.Fields(scanner.Text())
 					if len(fields) >= 2 {
 						pkgs = append(pkgs, Package{
-							Name:    fields[0],
-							Version: fields[1],
-							Manager: "pacman",
+							Name:        fields[0],
+							Version:     fields[1],
+							Manager:     "pacman",
+							IsInstalled: true,
 						})
 					}
 				}
@@ -301,16 +306,18 @@ func main() {
 						// Optional: check if version starts with a digit to confirm split
 						if len(version) > 0 && (version[0] >= '0' && version[0] <= '9') {
 							pkgs = append(pkgs, Package{
-								Name:    name,
-								Version: version,
-								Manager: "nix-env",
+								Name:        name,
+								Version:     version,
+								Manager:     "nix-env",
+								IsInstalled: true,
 							})
 						} else {
 							// Fallback if no clear version number
 							pkgs = append(pkgs, Package{
-								Name:    line,
-								Version: "unknown",
-								Manager: "nix-user",
+								Name:        line,
+								Version:     "unknown",
+								Manager:     "nix-user",
+								IsInstalled: true,
 							})
 						}
 					}
@@ -331,9 +338,10 @@ func main() {
 					fields := strings.Fields(scanner.Text())
 					if len(fields) >= 2 {
 						pkgs = append(pkgs, Package{
-							Name:    fields[0],
-							Version: fields[1],
-							Manager: "brew",
+							Name:        fields[0],
+							Version:     fields[1],
+							Manager:     "brew",
+							IsInstalled: true,
 						})
 					}
 				}
@@ -369,9 +377,10 @@ func main() {
 						version := strings.TrimPrefix(parts[1], "@")
 
 						pkgs = append(pkgs, Package{
-							Name:    name,
-							Version: version,
-							Manager: "macports",
+							Name:        name,
+							Version:     version,
+							Manager:     "macports",
+							IsInstalled: true,
 						})
 					}
 				}
@@ -393,9 +402,10 @@ func main() {
 					parts := strings.Fields(line)
 					if len(parts) >= 2 {
 						pkgs = append(pkgs, Package{
-							Name:    parts[0],
-							Version: parts[1],
-							Manager: "rpm/dnf",
+							Name:        parts[0],
+							Version:     parts[1],
+							Manager:     "rpm/dnf",
+							IsInstalled: true,
 						})
 					}
 				}
@@ -415,9 +425,10 @@ func main() {
 					parts := strings.Fields(line)
 					if len(parts) >= 2 {
 						pkgs = append(pkgs, Package{
-							Name:    parts[0],
-							Version: parts[1],
-							Manager: "guix",
+							Name:        parts[0],
+							Version:     parts[1],
+							Manager:     "guix",
+							IsInstalled: true,
 						})
 					}
 				}

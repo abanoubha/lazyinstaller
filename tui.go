@@ -109,7 +109,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Render the list content
 	var sb strings.Builder
 	for i, pkg := range m.filtered {
-		line := fmt.Sprintf("%-20s %-10s %s", pkg.Name, pkg.Manager, pkg.Version)
+		installed := "installed ✓"
+		if !pkg.IsInstalled {
+			installed = "install ↓"
+		}
+		line := fmt.Sprintf("%-30s %-10s %-30s %s", pkg.Name, pkg.Manager, pkg.Version, installed)
 		if i == m.cursor {
 			// Ensure the highlight spans the full viewport width
 			styled := selectedItemStyle.Width(m.viewport.Width).Render(line)
