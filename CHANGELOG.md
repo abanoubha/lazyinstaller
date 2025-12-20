@@ -7,6 +7,15 @@
 - ui: search input field
 - ui: list of installed packages
 - ui: command bar (hints)
+- feature: supported package managers are:
+    - apt, dpkg, dpkg-query
+    - snap
+    - flatpak
+    - pacman
+    - nix-env
+    - brew (homebrew)
+    - port (macports)
+    - dnf, rpm
 
 ## next
 
