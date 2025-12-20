@@ -62,7 +62,7 @@ func main() {
 			if strings.HasPrefix(arg, "-") {
 				switch arg {
 				case "--help", "-h":
-					printUsage()
+					printUsage(version)
 					return
 				case "--version", "-v":
 					fmt.Printf("lazyinstaller v%v\n", version)
@@ -71,7 +71,7 @@ func main() {
 			} else {
 				switch arg {
 				case "help":
-					printUsage()
+					printUsage(version)
 					return
 				case "version", "ver":
 					fmt.Printf("lazyinstaller v%v\n", version)
@@ -291,7 +291,7 @@ func main() {
 	}
 }
 
-func printUsage() {
+func printUsage(version string) {
 	fmt.Printf("lazyinstaller v%v\nthe tool to manage all programs, apps, and packages installed via all available package managers\n", version)
 }
 
