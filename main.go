@@ -207,6 +207,15 @@ func main() {
 					fmt.Printf("lazyinstaller v%v\n", version)
 					return
 				}
+			} else {
+				switch arg {
+				case "help":
+					printUsage()
+					return
+				case "version", "ver":
+					fmt.Printf("lazyinstaller v%v\n", version)
+					return
+				}
 			}
 		}
 	}
