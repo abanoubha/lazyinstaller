@@ -178,10 +178,20 @@ func main() {
 
 	pkgs := []Package{}
 
+	scannedPMs := make(map[string]struct{}, len(pms))
+
 	// Parse packages
 	for _, p := range pms {
 		switch p.Name {
 		case "apt", "dpkg", "dpkg-query":
+			if _, exists := scannedPMs["apt"]; exists {
+				continue
+			}
+
+			scannedPMs["apt"] = struct{}{}
+			scannedPMs["dpkg"] = struct{}{}
+			scannedPMs["dpkg-query"] = struct{}{}
+
 			// 1. Get APT/DPKG packages
 			// Using -W and -f for clean "name,version" output
 			cmdDpkg := exec.Command("dpkg-query", "-W", "-f=${binary:Package},${Version}\n")
@@ -201,6 +211,10 @@ func main() {
 				}
 			}
 		case "snap":
+			if _, exists := scannedPMs[p.Name]; exists {
+				continue
+			}
+			scannedPMs[p.Name] = struct{}{}
 			// 2. Get Snap packages
 			cmdSnap := exec.Command("snap", "list")
 			outSnap, err := cmdSnap.Output()
@@ -219,6 +233,10 @@ func main() {
 				}
 			}
 		case "flatpak":
+			if _, exists := scannedPMs[p.Name]; exists {
+				continue
+			}
+			scannedPMs[p.Name] = struct{}{}
 			// 3. Get Flatpak packages
 			// --app limits to applications (hiding runtimes)
 			// --columns formats output
