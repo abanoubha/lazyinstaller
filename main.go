@@ -188,10 +188,6 @@ func parsePackages(pmName string, output string) []Package {
 	return packages
 }
 
-func printUsage() {
-	fmt.Printf("lazyinstaller the tool to manage all programs, apps, and packages installed via all available package managers v%v\n", version)
-}
-
 func main() {
 	if len(os.Args) > 1 {
 		// parse arguments
@@ -381,6 +377,10 @@ func main() {
 		fmt.Printf("Alas, there's been an error: %v", err)
 		os.Exit(1)
 	}
+}
+
+func printUsage() {
+	fmt.Printf("lazyinstaller v%v\nthe tool to manage all programs, apps, and packages installed via all available package managers\n", version)
 }
 
 func isInstalled(pkg string) (bool, string) {
