@@ -338,6 +338,44 @@ func main() {
 					}
 				}
 			}
+		case "port":
+			if _, exists := scannedPMs[p.Name]; exists {
+				continue
+			}
+			scannedPMs[p.Name] = struct{}{}
+			// 7. Get MacPorts packages
+			// "active" ensures we only get the currently linked version
+			cmdPort := exec.Command("port", "installed", "active")
+			outPort, err := cmdPort.Output()
+			if err == nil {
+				scanner := bufio.NewScanner(strings.NewReader(string(outPort)))
+				// Skip the first line: "The following ports are currently installed:"
+				if scanner.Scan() {
+					_ = scanner.Text()
+				}
+
+				for scanner.Scan() {
+					line := strings.TrimSpace(scanner.Text())
+					if line == "" {
+						continue
+					}
+
+					// Line format: "name @version_variant (active)"
+					// Example: "curl @8.4.0_0+ssl (active)"
+					parts := strings.Fields(line)
+					if len(parts) >= 2 {
+						name := parts[0]
+						// Version is parts[1], usually starting with '@'
+						version := strings.TrimPrefix(parts[1], "@")
+
+						pkgs = append(pkgs, Package{
+							Name:    name,
+							Version: version,
+							Manager: "macports",
+						})
+					}
+				}
+			}
 		default:
 			continue
 		}
