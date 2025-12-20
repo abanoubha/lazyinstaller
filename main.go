@@ -23,6 +23,8 @@ type model struct {
 	viewport  viewport.Model
 	cursor    int // Index of the selected item in the filtered list
 	err       error
+	width     int
+	height    int
 }
 
 func initialModel() model {
@@ -77,10 +79,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case tea.WindowSizeMsg:
-		m.viewport.Width = msg.Width
-		m.viewport.Height = msg.Height - 10 // Leave room for input and status bar
-	}
+		m.width = msg.Width
+		m.height = msg.Height
 
+		// Update viewport size
+		// App margins (2x2=4 horizontal, 1x2=2 vertical) + Component overhead
+		// Width: Window - 4 (App Margin) - 2 (List Border) - 2 (List Padding) = Window - 8
+		// Height: Window - 2 (App Margin) - 3 (Input) - 2 (Gap) - 2 (Status) - 2 (List Border) = Window - 11
+
+		vpWidth := msg.Width - 8
+		if vpWidth < 0 {
+			vpWidth = 0
+		}
+
+		vpHeight := msg.Height - 11
+		if vpHeight < 0 {
+			vpHeight = 0
+		}
+
+		m.viewport.Width = vpWidth
+		m.viewport.Height = vpHeight
+	}
 	// Update text input
 	m.textInput, cmd = m.textInput.Update(msg)
 
@@ -148,12 +167,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
+	if m.width == 0 || m.height == 0 {
+		return "Initializing..."
+	}
+
 	statusBar := statusBarStyle.Render("Arrows: Navigate • Esc: Quit")
+
+	// Calculate component widths
+	// App margin is 2 on each side (total 4)
+	availableWidth := m.width - 4
+
+	// Input box: Border takes 2. Content width matches available minus border.
+	inputStyle := inputBoxStyle.Width(availableWidth - 2)
+
+	// List box: Border takes 2. Content width matches available minus border.
+	listStyle := listBoxStyle.Width(availableWidth - 2).Height(m.viewport.Height)
 
 	return appStyle.Render(fmt.Sprintf(
 		"%s\n\n%s\n%s",
-		inputBoxStyle.Render(m.textInput.View()),
-		listBoxStyle.Render(m.viewport.View()),
+		inputStyle.Render(m.textInput.View()),
+		listStyle.Render(m.viewport.View()),
 		statusBar,
 	)) + "\n"
 }

@@ -19,14 +19,13 @@ var (
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(activeBorderColor).
 			Padding(0, 1).
-			Width(80)
+			Padding(0, 1)
 
 	listBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(inactiveBorderColor).
 			Padding(0, 1).
-			Width(80).
-			Height(20)
+			Padding(0, 1)
 
 	// Navigation styles
 	selectedItemStyle = lipgloss.NewStyle().
