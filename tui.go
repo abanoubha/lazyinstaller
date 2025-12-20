@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
+	"os/exec"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -80,6 +83,73 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Filter logic
 	query := m.textInput.Value()
+
+	////////////// apt search ///////////
+
+	// Using --names-only restricts search to package names (ignoring descriptions)
+	cmdApt := exec.Command("apt", "search", "--names-only", strings.ToLower(query))
+	cmdApt.Env = append(cmdApt.Env, "TERM=dumb") // Disable colors
+
+	output, err := cmdApt.Output()
+	if err == nil {
+		scanner := bufio.NewScanner(bytes.NewReader(output))
+
+		var currentPkg *Package
+
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+
+			// Skip empty lines and headers
+			if line == "" || line == "Sorting... Done" || line == "Full Text Search... Done" {
+				continue
+			}
+
+			// Identify if this is a "Package Line" or a "Description Line"
+			// Package lines usually look like: "name/release version arch [status]"
+			// We detect this by looking for the slash '/' which separates name and suite
+			if strings.Contains(line, "/") {
+				// If we were building a previous package, save it now
+				if currentPkg != nil {
+					m.packages = append(m.packages, *currentPkg)
+				}
+
+				// Parse new package line
+				parts := strings.Fields(line)
+				if len(parts) < 2 {
+					currentPkg = nil
+					continue
+				}
+
+				// split "vim/jammy" -> "vim"
+				rawName := parts[0]
+				name := strings.Split(rawName, "/")[0]
+
+				version := parts[1]
+
+				isInstalled := strings.Contains(line, "[installed")
+
+				currentPkg = &Package{
+					Name:        name,
+					Version:     version,
+					Manager:     "apt/dpkg",
+					IsInstalled: isInstalled,
+				}
+
+				m.packages = append(m.packages, *currentPkg)
+
+			}
+		}
+
+		// Catch the very last package if the loop finished without appending
+		if currentPkg != nil {
+			m.packages = append(m.packages, *currentPkg)
+		}
+
+	} else {
+		// todo: show in status bar (can not search available packages)
+	}
+
+	////////////// end of apt search ///////////
 
 	// Reset filter and cursor if query changed (simple check)
 	// In a real app we'd track previous query to know if it changed
