@@ -316,7 +316,28 @@ func main() {
 					}
 				}
 			}
-
+		case "brew":
+			if _, exists := scannedPMs[p.Name]; exists {
+				continue
+			}
+			scannedPMs[p.Name] = struct{}{}
+			// 6. Get Nix user-profile packages
+			cmd := exec.Command("brew", "list", "--versions")
+			out, err := cmd.Output()
+			if err == nil {
+				scanner := bufio.NewScanner(strings.NewReader(string(out)))
+				for scanner.Scan() {
+					// Output lines: "readline 8.2.1" or "python@3.11 3.11.3"
+					fields := strings.Fields(scanner.Text())
+					if len(fields) >= 2 {
+						pkgs = append(pkgs, Package{
+							Name:    fields[0],
+							Version: fields[1],
+							Manager: "brew",
+						})
+					}
+				}
+			}
 		default:
 			continue
 		}
