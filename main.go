@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
-	"runtime"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -17,63 +16,10 @@ var (
 	operatingSystem string
 )
 
-type packageManager struct {
-	Name string
-	Path string
-}
-
-var pm packageManager
-var detectedPMs []packageManager
-
 type Package struct {
 	Name    string
 	Manager string
 	Version string
-}
-
-func detectPM() {
-	operatingSystem = runtime.GOOS
-	switch operatingSystem {
-	case "windows":
-		fmt.Println("Windows support is minimal.")
-		// Potential windows logic could be added here similar to linux/mac
-	case "darwin":
-		if ok, path := isInstalled("brew"); ok {
-			detectedPMs = append(detectedPMs, packageManager{Name: "brew", Path: path})
-		}
-		if ok, path := isInstalled("port"); ok {
-			detectedPMs = append(detectedPMs, packageManager{Name: "port", Path: path})
-		}
-	case "linux":
-		// Try parsing /etc/os-release for ID
-		id := getOSReleaseID()
-		if id != "" {
-			if val, ok := distro_pm[id]; ok {
-				if okP, path := isInstalled(val); okP {
-					detectedPMs = append(detectedPMs, packageManager{Name: val, Path: path})
-				}
-			}
-		}
-		detectCommonLinuxPMs()
-
-	default:
-		fmt.Printf("Unknown operating system: %s\n", operatingSystem)
-	}
-
-	// Deduplicate detectedPMs based on Name
-	uniquePMs := make([]packageManager, 0, len(detectedPMs))
-	seen := make(map[string]bool)
-	for _, p := range detectedPMs {
-		if !seen[p.Name] {
-			seen[p.Name] = true
-			uniquePMs = append(uniquePMs, p)
-		}
-	}
-	detectedPMs = uniquePMs
-
-	if len(detectedPMs) > 0 {
-		pm = detectedPMs[0]
-	}
 }
 
 func executeCommand(template string, pkgName string) {
@@ -137,38 +83,8 @@ func main() {
 		}
 	}
 
-	var action string
-
 	// Detect OS and PM
-	detectPM()
-
-	if pm.Name == "" {
-		fmt.Println("No supported package manager found.")
-		os.Exit(1)
-	}
-
-	cmds, ok := pm_commands[pm.Name]
-	if !ok {
-		fmt.Printf("Configurations for package manager '%s' not found.\n", pm.Name)
-		os.Exit(1)
-	}
-
-	// Check if we should update the index
-	updateRequiredActions := map[string]bool{
-		"install": true,
-		"add":     true,
-		"update":  true,
-		"upgrade": true,
-		"up":      true,
-		"search":  true,
-		"find":    true,
-	}
-
-	if cmds.UpdateIndex != "" && updateRequiredActions[action] {
-		// todo: status bar
-		//fmt.Println("Updating local index...")
-		executeCommand(cmds.UpdateIndex, "")
-	}
+	pms := detectPM()
 
 	// switch action {
 	// case "pmlist":
@@ -267,33 +183,68 @@ func main() {
 	pkgs := []Package{}
 
 	// Parse packages
-	for _, p := range detectedPMs {
-		_, ok := pm_commands[p.Name]
-		if !ok {
+	for _, p := range pms {
+		switch p.Name {
+		case "apt", "dpkg", "dpkg-query":
+			// 1. Get APT/DPKG packages
+			// Using -W and -f for clean "name,version" output
+			cmdDpkg := exec.Command("dpkg-query", "-W", "-f=${binary:Package},${Version}\n")
+			outDpkg, err := cmdDpkg.Output()
+			if err == nil {
+				scanner := bufio.NewScanner(strings.NewReader(string(outDpkg)))
+				for scanner.Scan() {
+					line := scanner.Text()
+					parts := strings.Split(line, ",")
+					if len(parts) >= 2 {
+						pkgs = append(pkgs, Package{
+							Name:    parts[0],
+							Version: parts[1],
+							Manager: "apt", // dpkg
+						})
+					}
+				}
+			}
+		case "snap":
+			// 2. Get Snap packages
+			cmdSnap := exec.Command("snap", "list")
+			outSnap, err := cmdSnap.Output()
+			if err == nil {
+				scanner := bufio.NewScanner(strings.NewReader(string(outSnap)))
+				scanner.Scan() // Skip header: "Name  Version  Rev..."
+				for scanner.Scan() {
+					fields := strings.Fields(scanner.Text())
+					if len(fields) >= 2 {
+						pkgs = append(pkgs, Package{
+							Name:    fields[0],
+							Version: fields[1],
+							Manager: "snap",
+						})
+					}
+				}
+			}
+		case "flatpak":
+			// 3. Get Flatpak packages
+			// --app limits to applications (hiding runtimes)
+			// --columns formats output
+			cmdFlatpak := exec.Command("flatpak", "list", "--app", "--columns=application,version")
+			outFlatpak, err := cmdFlatpak.Output()
+			if err == nil {
+				scanner := bufio.NewScanner(strings.NewReader(string(outFlatpak)))
+				for scanner.Scan() {
+					fields := strings.Fields(scanner.Text())
+					if len(fields) >= 2 {
+						pkgs = append(pkgs, Package{
+							Name:    fields[0],
+							Version: fields[1],
+							Manager: "flatpak",
+						})
+					}
+				}
+			}
+		default:
 			continue
 		}
 	}
-
-	/////////////////////////////////////////////
-	// 1. Get APT/DPKG packages
-	// Using -W and -f for clean "name,version" output
-	cmdDpkg := exec.Command("dpkg-query", "-W", "-f=${binary:Package},${Version}\n")
-	outDpkg, err := cmdDpkg.Output()
-	if err == nil {
-		scanner := bufio.NewScanner(strings.NewReader(string(outDpkg)))
-		for scanner.Scan() {
-			line := scanner.Text()
-			parts := strings.Split(line, ",")
-			if len(parts) >= 2 {
-				pkgs = append(pkgs, Package{
-					Name:    parts[0],
-					Version: parts[1],
-					Manager: "apt", // dpkg
-				})
-			}
-		}
-	}
-	/////////////////////////////////////////////
 
 	p := tea.NewProgram(initialModel(pkgs), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
@@ -319,34 +270,4 @@ func validateInput(input string) bool {
 	// Some packages have dots (e.g. python3.8) or plus (g++)
 	match, _ := regexp.MatchString(`^[a-zA-Z0-9_\-@.+]+$`, input)
 	return match
-}
-
-func getOSReleaseID() string {
-	data, err := os.ReadFile("/etc/os-release")
-	if err != nil {
-		return ""
-	}
-	content := string(data)
-	lines := strings.SplitSeq(content, "\n")
-	for line := range lines {
-		if after, ok := strings.CutPrefix(line, "ID="); ok {
-			id := after
-			return strings.Trim(id, "\"")
-		}
-	}
-	return ""
-}
-
-// detectCommonLinuxPMs appends all found supported package managers to detectedPMs.
-func detectCommonLinuxPMs() {
-	checks := []string{"apt", "dnf", "pacman", "snap", "flatpak", "zypper", "yum", "apk", "xbps-install", "emerge", "nix-env", "brew", "port", "winget", "choco", "scoop"}
-	for _, p := range checks {
-		wrapperName := p
-		if p == "xbps-install" {
-			wrapperName = "xbps"
-		}
-		if ok, path := isInstalled(p); ok {
-			detectedPMs = append(detectedPMs, packageManager{Name: wrapperName, Path: path})
-		}
-	}
 }
