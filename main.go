@@ -255,6 +255,28 @@ func main() {
 					}
 				}
 			}
+		case "pacman":
+			if _, exists := scannedPMs[p.Name]; exists {
+				continue
+			}
+			scannedPMs[p.Name] = struct{}{}
+			// 4. Get Pacman packages (Arch Linux)
+			cmdPacman := exec.Command("pacman", "-Q")
+			outPacman, err := cmdPacman.Output()
+			if err == nil {
+				scanner := bufio.NewScanner(strings.NewReader(string(outPacman)))
+				for scanner.Scan() {
+					// Output format: "name version" (e.g., "firefox 112.0.1-1")
+					fields := strings.Fields(scanner.Text())
+					if len(fields) >= 2 {
+						pkgs = append(pkgs, Package{
+							Name:    fields[0],
+							Version: fields[1],
+							Manager: "pacman",
+						})
+					}
+				}
+			}
 		default:
 			continue
 		}
