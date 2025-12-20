@@ -52,6 +52,8 @@ func executeCommand(template string, pkgName string) {
 }
 
 func main() {
+	const version = "25.12.20"
+
 	if len(os.Args) > 1 {
 		// parse arguments
 		args := os.Args[1:]
