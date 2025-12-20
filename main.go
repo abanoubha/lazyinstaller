@@ -130,7 +130,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	for i, pkg := range m.filtered {
 		line := fmt.Sprintf("%-20s %-10s %s", pkg.Name, pkg.Manager, pkg.Version)
 		if i == m.cursor {
-			sb.WriteString(selectedItemStyle.Render(line) + "\n")
+			// Ensure the highlight spans the full viewport width
+			styled := selectedItemStyle.Width(m.viewport.Width).Render(line)
+			sb.WriteString(styled + "\n")
 		} else {
 			sb.WriteString(line + "\n")
 		}
