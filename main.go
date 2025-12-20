@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -15,8 +14,6 @@ import (
 
 var (
 	operatingSystem string
-	verbose         bool
-	forcedPM        string
 )
 
 type packageManager struct {
@@ -34,20 +31,6 @@ type Package struct {
 }
 
 func detectPM() {
-	if forcedPM != "" {
-		pm = packageManager{Name: forcedPM, Path: ""}
-		detectedPMs = append(detectedPMs, pm)
-		return
-	}
-
-	// Check if binary name acts as an alias
-	binName := filepath.Base(os.Args[0])
-	if _, ok := pm_commands[binName]; ok && binName != "i" {
-		pm = packageManager{Name: binName, Path: ""}
-		detectedPMs = append(detectedPMs, pm)
-		return
-	}
-
 	operatingSystem = runtime.GOOS
 	switch operatingSystem {
 	case "windows":
@@ -264,9 +247,8 @@ func main() {
 	}
 
 	if cmds.UpdateIndex != "" && updateRequiredActions[action] {
-		if verbose {
-			fmt.Println("Updating local index...")
-		}
+		// todo: status bar
+		//fmt.Println("Updating local index...")
 		executeCommand(cmds.UpdateIndex, "")
 	}
 
