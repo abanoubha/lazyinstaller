@@ -207,7 +207,7 @@ func main() {
 						pkgs = append(pkgs, Package{
 							Name:    parts[0],
 							Version: parts[1],
-							Manager: "apt", // dpkg
+							Manager: "apt/dpkg",
 						})
 					}
 				}
