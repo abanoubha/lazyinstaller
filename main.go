@@ -279,6 +279,44 @@ func main() {
 					}
 				}
 			}
+		case "nix-env":
+			if _, exists := scannedPMs[p.Name]; exists {
+				continue
+			}
+			scannedPMs[p.Name] = struct{}{}
+			// 5. Get Nix user-profile packages
+			cmdNix := exec.Command("nix-env", "-q")
+			outNix, err := cmdNix.Output()
+			if err == nil {
+				scanner := bufio.NewScanner(strings.NewReader(string(outNix)))
+				for scanner.Scan() {
+					line := scanner.Text()
+					// Nix output format is usually "name-version"
+					// Finding the last hyphen helps separate version from name
+					lastHyphen := strings.LastIndex(line, "-")
+					if lastHyphen != -1 {
+						name := line[:lastHyphen]
+						version := line[lastHyphen+1:]
+
+						// Optional: check if version starts with a digit to confirm split
+						if len(version) > 0 && (version[0] >= '0' && version[0] <= '9') {
+							pkgs = append(pkgs, Package{
+								Name:    name,
+								Version: version,
+								Manager: "nix-env",
+							})
+						} else {
+							// Fallback if no clear version number
+							pkgs = append(pkgs, Package{
+								Name:    line,
+								Version: "unknown",
+								Manager: "nix-user",
+							})
+						}
+					}
+				}
+			}
+
 		default:
 			continue
 		}
