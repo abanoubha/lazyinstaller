@@ -16,6 +16,7 @@
     - brew (homebrew)
     - port (macports)
     - dnf, rpm
+    - guix
 
 ## next
 

@@ -400,6 +400,28 @@ func main() {
 					}
 				}
 			}
+		case "guix":
+			if _, exists := scannedPMs[p.Name]; exists {
+				continue
+			}
+			scannedPMs[p.Name] = struct{}{}
+			// 9. Get Guix packages
+			cmdGuix := exec.Command("guix", "package", "-I")
+			outGuix, err := cmdGuix.Output()
+			if err == nil {
+				scanner := bufio.NewScanner(strings.NewReader(string(outGuix)))
+				for scanner.Scan() {
+					line := scanner.Text()
+					parts := strings.Fields(line)
+					if len(parts) >= 2 {
+						pkgs = append(pkgs, Package{
+							Name:    parts[0],
+							Version: parts[1],
+							Manager: "guix",
+						})
+					}
+				}
+			}
 
 		default:
 			continue
