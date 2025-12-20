@@ -63,7 +63,7 @@ var pm_commands = map[string]commands{
 		Search:        "flatpak search x",
 		Info:          "flatpak info x",
 		UpgradeAll:    "sudo flatpak update",
-		ListInstalled: "flatpak list",
+		ListInstalled: "flatpak list --app", // added --app to show apps only
 	},
 	"snap": { // need sudo for install, remove, upgrade, update
 		Name:          "snap",
