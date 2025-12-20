@@ -132,16 +132,12 @@ func getAllPackages(pmName string, cmdStr string) ([]Package, error) {
 }
 
 func parsePackages(pmName string, output string) []Package {
-	lines := strings.Split(output, "\n")
+	lines := strings.SplitSeq(output, "\n")
 	var packages []Package
 
 	switch pmName {
 	case "apt":
-		// apt list --installed format:
-		// package_name/distro_release,distro_release version arch [installed]
-		// e.g. "adduser/noble,noble,now 3.137ubuntu1 all [installed]"
-		// Note call may include "Listing..." on first line
-		for _, line := range lines {
+		for line := range lines {
 			if strings.HasPrefix(line, "Listing...") {
 				continue
 			}
@@ -157,9 +153,6 @@ func parsePackages(pmName string, output string) []Package {
 			name := slashSplit[0]
 
 			// rest string: "noble,noble,now 3.137ubuntu1 all [installed]"
-			// We want version. It's usually the second field after spaces?
-			// But the first part "noble,noble,now" might contain spaces? No, usually comma separated.
-			// Let's split by spaces.
 			rest := slashSplit[1]
 			fields := strings.Fields(rest)
 			// fields[0] should be "noble,noble,now" (the release info)
