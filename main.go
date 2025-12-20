@@ -87,15 +87,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Width: Window - 4 (App Margin) - 2 (List Border) - 2 (List Padding) = Window - 8
 		// Height: Window - 2 (App Margin) - 3 (Input) - 2 (Gap) - 2 (Status) - 2 (List Border) = Window - 11
 
-		vpWidth := msg.Width - 8
-		if vpWidth < 0 {
-			vpWidth = 0
-		}
+		vpWidth := max(msg.Width-8, 0)
 
-		vpHeight := msg.Height - 11
-		if vpHeight < 0 {
-			vpHeight = 0
-		}
+		vpHeight := max(msg.Height-11, 0)
 
 		m.viewport.Width = vpWidth
 		m.viewport.Height = vpHeight
