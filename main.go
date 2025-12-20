@@ -376,6 +376,31 @@ func main() {
 					}
 				}
 			}
+		case "dnf", "rpm":
+			if _, exists := scannedPMs["dnf"]; exists {
+				continue
+			}
+			scannedPMs["dnf"] = struct{}{}
+			scannedPMs["rpm"] = struct{}{}
+			// 8. Get RPM packages (Direct DB access)
+			// Use --qf to output "name version-release" directly
+			cmdRpm := exec.Command("rpm", "-qa", "--qf", "%{NAME} %{VERSION}-%{RELEASE}\n")
+			outRpm, err := cmdRpm.Output()
+			if err == nil {
+				scanner := bufio.NewScanner(strings.NewReader(string(outRpm)))
+				for scanner.Scan() {
+					line := scanner.Text()
+					parts := strings.Fields(line)
+					if len(parts) >= 2 {
+						pkgs = append(pkgs, Package{
+							Name:    parts[0],
+							Version: parts[1],
+							Manager: "rpm/dnf",
+						})
+					}
+				}
+			}
+
 		default:
 			continue
 		}
