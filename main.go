@@ -12,10 +12,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-var (
-	operatingSystem string
-)
-
 type Package struct {
 	Name    string
 	Manager string

@@ -14,7 +14,7 @@ type packageManager struct {
 
 func detectPM() []packageManager {
 	var detectedPMs []packageManager
-	operatingSystem = runtime.GOOS
+	operatingSystem := runtime.GOOS
 	switch operatingSystem {
 	case "windows":
 		fmt.Println("Windows support is minimal.")
