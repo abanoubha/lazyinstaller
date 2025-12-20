@@ -2,11 +2,11 @@
 
 ## v1.0.0
 
-- TUI for lazyinstaller
+- ui: responsive terminal user interface
+- feature: list all installed packages
 
 ## next
 
-- list all installed packages
 - search for a package with all available package managers
 - install package
 - remove package
