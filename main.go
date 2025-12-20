@@ -50,10 +50,6 @@ func detectPM() {
 			if val, ok := distro_pm[id]; ok {
 				if okP, path := isInstalled(val); okP {
 					detectedPMs = append(detectedPMs, packageManager{Name: val, Path: path})
-					// Don't return, continue to check common ones for co-existing PMs (e.g. invalidating assumption that we only have one)
-					// Actually, distro_pm often maps to the MAIN system PM.
-					// We should probably check common ones too, but deduplicate?
-					// For now, let's keep the logic simple: verify distro PM, then check common ones.
 				}
 			}
 		}
@@ -106,7 +102,8 @@ func executeCommand(template string, pkgName string) {
 
 	err := cmd.Run()
 	if err != nil {
-		fmt.Printf("Error executing command: %v\n", err)
+		// todo : status bar
+		// fmt.Printf("Error executing command: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -217,7 +214,6 @@ func main() {
 	}
 
 	var action string
-	var pkgName string
 
 	// Detect OS and PM
 	detectPM()
@@ -225,13 +221,6 @@ func main() {
 	if pm.Name == "" {
 		fmt.Println("No supported package manager found.")
 		os.Exit(1)
-	}
-
-	if pkgName != "" {
-		if !validateInput(pkgName) {
-			fmt.Printf("Invalid package name: %s\n", pkgName)
-			os.Exit(1)
-		}
 	}
 
 	cmds, ok := pm_commands[pm.Name]
