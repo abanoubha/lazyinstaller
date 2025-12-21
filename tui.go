@@ -16,6 +16,7 @@ type model struct {
 	textInput textinput.Model
 	packages  []Package
 	filtered  []Package
+	status    string
 	viewport  viewport.Model
 	cursor    int // Index of the selected item in the filtered list
 	err       error
@@ -23,7 +24,7 @@ type model struct {
 	height    int
 }
 
-func initialModel(pkgs []Package) model {
+func initialModel(pkgs []Package, status string) model {
 	ti := textinput.New()
 	ti.Placeholder = "Search packages..."
 	ti.Focus()
@@ -36,6 +37,7 @@ func initialModel(pkgs []Package) model {
 		textInput: ti,
 		packages:  pkgs,
 		filtered:  pkgs,
+		status:    status,
 		viewport:  vp,
 		cursor:    0,
 	}
@@ -68,12 +70,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Update viewport size
 		// App margins (2x2=4 horizontal, 1x2=2 vertical) + Component overhead
-		// Width: Window - 4 (App Margin) - 2 (List Border) - 2 (List Padding) = Window - 8
-		// Height: Window - 2 (App Margin) - 3 (Input) - 2 (Gap) - 2 (Status) - 2 (List Border) = Window - 11
+		// Width: Window - 2 (List Border) = Window - 2
+		// Height: Window - 3 (Input) - 2 (Gap) - 2 (Status) - 2 (List Border) = Window - 9
 
-		vpWidth := max(msg.Width-8, 0)
+		vpWidth := max(msg.Width-2, 0)
 
-		vpHeight := max(msg.Height-11, 0)
+		vpHeight := max(msg.Height-9, 0)
 
 		m.viewport.Width = vpWidth
 		m.viewport.Height = vpHeight
@@ -224,7 +226,7 @@ func (m model) View() string {
 
 	commandBar := commandBarStyle.Render("Arrows: Navigate • Esc: Quit")
 
-	statusBar := statusBarStyle.Render("LazyInstaller just started")
+	statusBar := statusBarStyle.Width(m.width)
 
 	// Calculate component widths
 	availableWidth := m.width
@@ -240,6 +242,6 @@ func (m model) View() string {
 		inputStyle.Render(m.textInput.View()),
 		listStyle.Render(m.viewport.View()),
 		commandBar,
-		statusBar,
+		statusBar.Render(m.status),
 	)) + "\n"
 }

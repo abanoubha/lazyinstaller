@@ -179,6 +179,8 @@ func main() {
 	// 	fmt.Printf("'%v' sub-command is not supported.\n", action)
 	// }
 
+	status := ""
+
 	pkgs := []Package{}
 
 	scannedPMs := make(map[string]struct{}, len(pms))
@@ -213,6 +215,9 @@ func main() {
 						})
 					}
 				}
+				status = "Successfully got APT/DPKG packages"
+			} else {
+				status = "Failed to get APT/DPKG packages"
 			}
 		case "snap":
 			if _, exists := scannedPMs[p.Name]; exists {
@@ -236,6 +241,9 @@ func main() {
 						})
 					}
 				}
+				status = "Successfully got Snap packages"
+			} else {
+				status = "Failed to get Snap packages"
 			}
 		case "flatpak":
 			if _, exists := scannedPMs[p.Name]; exists {
@@ -260,6 +268,9 @@ func main() {
 						})
 					}
 				}
+				status = "Successfully got Flatpak packages"
+			} else {
+				status = "Failed to get Flatpak packages"
 			}
 		case "pacman":
 			if _, exists := scannedPMs[p.Name]; exists {
@@ -283,6 +294,9 @@ func main() {
 						})
 					}
 				}
+				status = "Successfully got Pacman packages"
+			} else {
+				status = "Failed to get Pacman packages"
 			}
 		case "nix-env":
 			if _, exists := scannedPMs[p.Name]; exists {
@@ -322,6 +336,9 @@ func main() {
 						}
 					}
 				}
+				status = "Successfully got Nix packages"
+			} else {
+				status = "Failed to get Nix packages"
 			}
 		case "brew":
 			if _, exists := scannedPMs[p.Name]; exists {
@@ -345,6 +362,9 @@ func main() {
 						})
 					}
 				}
+				status = "Successfully got Homebrew packages"
+			} else {
+				status = "Failed to get Homebrew packages"
 			}
 		case "port":
 			if _, exists := scannedPMs[p.Name]; exists {
@@ -384,6 +404,9 @@ func main() {
 						})
 					}
 				}
+				status = "Successfully got MacPorts packages"
+			} else {
+				status = "Failed to get MacPorts packages"
 			}
 		case "dnf", "rpm":
 			if _, exists := scannedPMs["dnf"]; exists {
@@ -409,6 +432,9 @@ func main() {
 						})
 					}
 				}
+				status = "Successfully got RPM packages"
+			} else {
+				status = "Failed to get RPM packages"
 			}
 		case "guix":
 			if _, exists := scannedPMs[p.Name]; exists {
@@ -432,14 +458,17 @@ func main() {
 						})
 					}
 				}
+				status = "Successfully got Guix packages"
+			} else {
+				status = "Failed to get Guix packages"
 			}
-
 		default:
+			status = "Unsupported package manager"
 			continue
 		}
 	}
 
-	p := tea.NewProgram(initialModel(pkgs), tea.WithAltScreen())
+	p := tea.NewProgram(initialModel(pkgs, status), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)
 		os.Exit(1)
