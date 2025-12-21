@@ -153,6 +153,55 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	////////////// end of apt search ///////////
 
+	////////////// snap search ///////////
+
+	cmdSnap := exec.Command("snap", "search", strings.ToLower(query))
+	cmdSnap.Env = append(cmdSnap.Env, "TERM=dumb") // Disable colors
+
+	outputSnap, err := cmdSnap.Output()
+	if err == nil {
+		scanner := bufio.NewScanner(bytes.NewReader(outputSnap))
+
+		var currentPkg *Package
+
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+
+			// Skip empty lines and headers
+			if line == "" {
+				continue
+			}
+
+			parts := strings.Fields(line)
+			if len(parts) < 2 {
+				currentPkg = nil
+				continue
+			}
+
+			currentPkg = &Package{
+				Name:        parts[0],
+				Version:     parts[1],
+				Manager:     "snap",
+				IsInstalled: false,
+			}
+
+			// todo: check if snap is installed
+
+			m.packages = append(m.packages, *currentPkg)
+		}
+
+		// Catch the very last package if the loop finished without appending
+		if currentPkg != nil {
+			m.packages = append(m.packages, *currentPkg)
+		}
+
+		m.status = "Successfully searched available packages"
+	} else {
+		m.status = "Failed to search available packages"
+	}
+
+	///////////// end of snap search ///////////
+
 	// Reset filter and cursor if query changed (simple check)
 	// In a real app we'd track previous query to know if it changed
 	newFiltered := []Package{}
