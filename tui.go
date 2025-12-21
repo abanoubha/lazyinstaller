@@ -74,11 +74,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Height: Window - 3 (Input) - 2 (Gap) - 2 (Status) - 2 (List Border) = Window - 9
 
 		vpWidth := max(msg.Width-2, 0)
-
 		vpHeight := max(msg.Height-9, 0)
 
 		m.viewport.Width = vpWidth
 		m.viewport.Height = vpHeight
+
+		// Update text input width to match available space (minus border overhead)
+		// Input box has 2 chars of border/padding overhead (calculated in View as availableWidth - 2)
+		// textInput itself needs to be set.
+		// availableWidth for input is m.width
+		// inputBoxStyle.Width(m.width - 2)
+		// So textInput.Width should be m.width - 4 (2 for border, 2 for internal padding/cursor if any? usually just border)
+		// standard textinput styling usually needs a bit of room.
+		m.textInput.Width = max(vpWidth-2, 0)
 	}
 	// Update text input
 	m.textInput, cmd = m.textInput.Update(msg)
@@ -230,12 +238,37 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Render the list content
 	var sb strings.Builder
+
+	// Calculate column widths based on viewport width
+	// Total available width = m.viewport.Width
+	// Distribution: Name (35%), Manager (15%), Version (35%), Status (15%)
+	// Ensure min widths for usability
+	totalWidth := max(m.viewport.Width, 40) // Fallback for very small screens
+
+	colName := max(int(float64(totalWidth)*0.35), 10)
+	colMgr := max(int(float64(totalWidth)*0.15), 6)
+	colStatus := max(int(float64(totalWidth)*0.15), 10)
+	// Give remaining width to Version
+	colVer := max(totalWidth-colName-colMgr-colStatus-3, 10) // -3 for spacing
+
+	formatStr := fmt.Sprintf("%%-%ds %%-%ds %%-%ds %%s", colName, colMgr, colVer)
+
 	for i, pkg := range m.filtered {
 		installed := "installed ✓"
 		if !pkg.IsInstalled {
 			installed = "install ↓"
 		}
-		line := fmt.Sprintf("%-30s %-10s %-30s %s", pkg.Name, pkg.Manager, pkg.Version, installed)
+
+		// Truncate fields to prevent line wrapping
+		name := truncate(pkg.Name, colName)
+		manager := truncate(pkg.Manager, colMgr)
+		version := truncate(pkg.Version, colVer)
+		// Status is last, so strict truncation is less critical for wrapping if we don't pad it,
+		// but good for consistency. We'll let it take remaining space if any,
+		// but the format string won't pad it heavily if we just use %s.
+		// Actually, let's keep it simple.
+
+		line := fmt.Sprintf(formatStr, name, manager, version, installed)
 		if i == m.cursor {
 			// Ensure the highlight spans the full viewport width
 			styled := selectedItemStyle.Width(m.viewport.Width).Render(line)
@@ -294,4 +327,14 @@ func (m model) View() string {
 		commandBar,
 		statusBar.Render(m.status),
 	)) + "\n"
+}
+
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	if maxLen < 3 {
+		return s[:maxLen]
+	}
+	return s[:maxLen-1] + "…"
 }
