@@ -17,11 +17,11 @@
     - port (macports)
     - dnf, rpm
     - guix
+- status bar (e.g. updating local index...)
+- search for a package with all available package managers
 
 ## next
 
-- status bar (e.g. updating local index...)
-- search for a package with all available package managers
 - install package
 - remove package
 - update/upgrade package
