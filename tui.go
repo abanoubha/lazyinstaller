@@ -227,8 +227,7 @@ func (m model) View() string {
 	statusBar := statusBarStyle.Render("LazyInstaller just started")
 
 	// Calculate component widths
-	// App margin is 2 on each side (total 4)
-	availableWidth := m.width - 4
+	availableWidth := m.width
 
 	// Input box: Border takes 2. Content width matches available minus border.
 	inputStyle := inputBoxStyle.Width(availableWidth - 2)
