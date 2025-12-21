@@ -147,8 +147,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.packages = append(m.packages, *currentPkg)
 		}
 
+		m.status = "Successfully searched available packages"
 	} else {
-		// todo: show in status bar (can not search available packages)
+		m.status = "Failed to search available packages"
 	}
 
 	////////////// end of apt search ///////////
