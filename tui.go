@@ -222,7 +222,9 @@ func (m model) View() string {
 		return "Initializing..."
 	}
 
-	statusBar := statusBarStyle.Render("Arrows: Navigate • Esc: Quit")
+	commandBar := commandBarStyle.Render("Arrows: Navigate • Esc: Quit")
+
+	statusBar := statusBarStyle.Render("LazyInstaller just started")
 
 	// Calculate component widths
 	// App margin is 2 on each side (total 4)
@@ -235,9 +237,10 @@ func (m model) View() string {
 	listStyle := listBoxStyle.Width(availableWidth - 2).Height(m.viewport.Height)
 
 	return appStyle.Render(fmt.Sprintf(
-		"%s\n\n%s\n%s",
+		"%s\n\n%s\n%s\n%s",
 		inputStyle.Render(m.textInput.View()),
 		listStyle.Render(m.viewport.View()),
+		commandBar,
 		statusBar,
 	)) + "\n"
 }
