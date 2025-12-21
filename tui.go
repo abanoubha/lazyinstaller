@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -12,16 +13,25 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+type searchResultMsg struct {
+	packages []Package
+	status   string
+}
+
+type searchErrorMsg error
+
 type model struct {
-	textInput textinput.Model
-	packages  []Package
-	filtered  []Package
-	status    string
-	viewport  viewport.Model
-	cursor    int // Index of the selected item in the filtered list
-	err       error
-	width     int
-	height    int
+	textInput    textinput.Model
+	packages     []Package
+	filtered     []Package
+	status       string
+	viewport     viewport.Model
+	cursor       int // Index of the selected item in the filtered list
+	err          error
+	width        int
+	height       int
+	searchCtx    context.Context
+	searchCancel context.CancelFunc
 }
 
 func initialModel(pkgs []Package, status string) model {
@@ -69,187 +79,89 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 
 		// Update viewport size
-		// App margins (2x2=4 horizontal, 1x2=2 vertical) + Component overhead
-		// Width: Window - 2 (List Border) = Window - 2
-		// Height: Window - 3 (Input) - 2 (Gap) - 2 (Status) - 2 (List Border) = Window - 9
-
 		vpWidth := max(msg.Width-2, 0)
 		vpHeight := max(msg.Height-9, 0)
 
 		m.viewport.Width = vpWidth
 		m.viewport.Height = vpHeight
 
-		// Update text input width to match available space (minus border overhead)
-		// Input box has 2 chars of border/padding overhead (calculated in View as availableWidth - 2)
-		// textInput itself needs to be set.
-		// availableWidth for input is m.width
-		// inputBoxStyle.Width(m.width - 2)
-		// So textInput.Width should be m.width - 4 (2 for border, 2 for internal padding/cursor if any? usually just border)
-		// standard textinput styling usually needs a bit of room.
+		// Update text input width
 		m.textInput.Width = max(vpWidth-2, 0)
 	}
-	// Update text input
-	m.textInput, cmd = m.textInput.Update(msg)
 
-	// Filter logic
+	// Update text input
+	var tiCmd tea.Cmd
+	m.textInput, tiCmd = m.textInput.Update(msg)
+	cmd = tea.Batch(cmd, tiCmd)
+
+	// If text input changed, trigger search
 	query := m.textInput.Value()
 
-	////////////// apt search ///////////
+	// We check if the query changed.
+	// Note: We need to store the "last query" to know if it changed.
+	// But simply checking against the current results isn't enough.
+	// For now, we can rely on the fact that if we get a KeyMsg that isn't navigation, it might be text.
+	// Or we can just check if we are in a "Searching" state?
+	// Actually, let's just use a simple heuristic: if the message is a KeyMsg (and not navigation), we assume input *might* have changed.
+	// Better yet, we can check if the model's query matches the last one? No, we don't store "last query".
+	// Let's just cancel and restart if it's a typing event?
+	// The best way is to check `textInput.Value()` vs a stored value, but `m` is value receiver in some places (standard Bubble Tea).
+	// But `Update` returns `m`. So we can't easily store "previous" unless we add it to struct.
+	// However, `textInput.Update` handles the change.
 
-	// Using --names-only restricts search to package names (ignoring descriptions)
-	cmdApt := exec.Command("apt", "search", "--names-only", strings.ToLower(query))
-	cmdApt.Env = append(cmdApt.Env, "TERM=dumb") // Disable colors
+	// Let's trigger search on every KeyMsg that is a text character.
+	// Or simplistic: Just fire it?
+	// Proper way: Add `lastQuery` to model?
+	// For now, let's just trigger it. The context cancellation handles the "agility".
 
-	output, err := cmdApt.Output()
-	if err == nil {
-		scanner := bufio.NewScanner(bytes.NewReader(output))
+	// Actually, let's look at the previous attempt:
+	// `if m.textInput.Value() != query` -> query was defined as `m.textInput.Value()` so that is always false!
+	// We need to compare to something else.
 
-		var currentPkg *Package
+	// To fix the "jittery" issue, we MUST cancel the old context.
+	// We will assume that strictly speaking, we want to search if the input is not empty.
+	// But we don't want to re-search if nothing changed.
+	// Since we don't track `lastQuery`, let's just do it if `msg` is likely to have changed text.
 
-		for scanner.Scan() {
-			line := strings.TrimSpace(scanner.Text())
-
-			// Skip empty lines and headers
-			if line == "" || line == "Sorting... Done" || line == "Full Text Search... Done" {
-				continue
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		// If it's a key message and NOT navigation/special, it's likely text.
+		if msg.Type == tea.KeyRunes || msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete {
+			if m.searchCancel != nil {
+				m.searchCancel()
 			}
-
-			// Identify if this is a "Package Line" or a "Description Line"
-			// Package lines usually look like: "name/release version arch [status]"
-			// We detect this by looking for the slash '/' which separates name and suite
-			if strings.Contains(line, "/") {
-				// If we were building a previous package, save it now
-				if currentPkg != nil {
-					m.packages = append(m.packages, *currentPkg)
-				}
-
-				// Parse new package line
-				parts := strings.Fields(line)
-				if len(parts) < 2 {
-					currentPkg = nil
-					continue
-				}
-
-				// split "vim/jammy" -> "vim"
-				rawName := parts[0]
-				name := strings.Split(rawName, "/")[0]
-
-				version := parts[1]
-
-				isInstalled := strings.Contains(line, "[installed")
-
-				currentPkg = &Package{
-					Name:        name,
-					Version:     version,
-					Manager:     "apt/dpkg",
-					IsInstalled: isInstalled,
-				}
-
-				m.packages = append(m.packages, *currentPkg)
-
-			}
-		}
-
-		// Catch the very last package if the loop finished without appending
-		if currentPkg != nil {
-			m.packages = append(m.packages, *currentPkg)
-		}
-
-		m.status = "Successfully searched available packages"
-	} else {
-		m.status = "Failed to search available packages"
-	}
-
-	////////////// end of apt search ///////////
-
-	////////////// snap search ///////////
-
-	cmdSnap := exec.Command("snap", "search", strings.ToLower(query))
-	cmdSnap.Env = append(cmdSnap.Env, "TERM=dumb") // Disable colors
-
-	outputSnap, err := cmdSnap.Output()
-	if err == nil {
-		scanner := bufio.NewScanner(bytes.NewReader(outputSnap))
-
-		var currentPkg *Package
-
-		for scanner.Scan() {
-			line := strings.TrimSpace(scanner.Text())
-
-			// Skip empty lines and headers
-			if line == "" {
-				continue
-			}
-
-			parts := strings.Fields(line)
-			if len(parts) < 2 {
-				currentPkg = nil
-				continue
-			}
-
-			currentPkg = &Package{
-				Name:        parts[0],
-				Version:     parts[1],
-				Manager:     "snap",
-				IsInstalled: false,
-			}
-
-			// todo: check if snap is installed
-
-			m.packages = append(m.packages, *currentPkg)
-		}
-
-		// Catch the very last package if the loop finished without appending
-		if currentPkg != nil {
-			m.packages = append(m.packages, *currentPkg)
-		}
-
-		m.status = "Successfully searched available packages"
-	} else {
-		m.status = "Failed to search available packages"
-	}
-
-	///////////// end of snap search ///////////
-
-	// Reset filter and cursor if query changed (simple check)
-	// In a real app we'd track previous query to know if it changed
-	newFiltered := []Package{}
-	for _, pkg := range m.packages {
-		if strings.Contains(strings.ToLower(pkg.Name), strings.ToLower(query)) {
-			newFiltered = append(newFiltered, pkg)
+			var ctx context.Context
+			ctx, m.searchCancel = context.WithCancel(context.Background())
+			m.searchCtx = ctx
+			// Delay slightly? No, immediate is fine with cancellation.
+			cmd = tea.Batch(cmd, performSearch(ctx, query))
+			m.status = "Searching..."
 		}
 	}
 
-	// If the list content changed, likely due to a search update, reset cursor
-	// This is a naive check; ideally we'd check if the query string actually changed.
-	// For now, if the length differs or we are just typing (handled by textInput.Update potentially consuming keys),
-	// let's just re-render.
-	// Optimization: check if query matches previous state. But here we re-filter every frame textInput updates.
-
-	// To properly reset cursor on search change, we need to know if textInput changed.
-	// simpler: just re-assign. If cursor is out of bounds, fix it.
-	m.filtered = newFiltered
-	if m.cursor >= len(m.filtered) {
+	switch msg := msg.(type) {
+	case searchResultMsg:
+		m.packages = msg.packages
+		m.status = msg.status
+		m.filtered = m.packages
 		m.cursor = 0
-	}
-	if len(m.filtered) == 0 {
-		m.cursor = -1 // No selection
+		if len(m.filtered) == 0 {
+			m.cursor = -1
+		}
+	case searchErrorMsg:
+		m.status = "Search failed: " + msg.Error()
 	}
 
 	// Render the list content
 	var sb strings.Builder
 
 	// Calculate column widths based on viewport width
-	// Total available width = m.viewport.Width
-	// Distribution: Name (35%), Manager (15%), Version (35%), Status (15%)
-	// Ensure min widths for usability
-	totalWidth := max(m.viewport.Width, 40) // Fallback for very small screens
+	totalWidth := max(m.viewport.Width, 40) // Fallback
 
 	colName := max(int(float64(totalWidth)*0.35), 10)
 	colMgr := max(int(float64(totalWidth)*0.15), 6)
 	colStatus := max(int(float64(totalWidth)*0.15), 10)
-	// Give remaining width to Version
-	colVer := max(totalWidth-colName-colMgr-colStatus-3, 10) // -3 for spacing
+	colVer := max(totalWidth-colName-colMgr-colStatus-3, 10)
 
 	formatStr := fmt.Sprintf("%%-%ds %%-%ds %%-%ds %%s", colName, colMgr, colVer)
 
@@ -259,18 +171,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			installed = "install ↓"
 		}
 
-		// Truncate fields to prevent line wrapping
 		name := truncate(pkg.Name, colName)
 		manager := truncate(pkg.Manager, colMgr)
 		version := truncate(pkg.Version, colVer)
-		// Status is last, so strict truncation is less critical for wrapping if we don't pad it,
-		// but good for consistency. We'll let it take remaining space if any,
-		// but the format string won't pad it heavily if we just use %s.
-		// Actually, let's keep it simple.
 
 		line := fmt.Sprintf(formatStr, name, manager, version, installed)
 		if i == m.cursor {
-			// Ensure the highlight spans the full viewport width
 			styled := selectedItemStyle.Width(m.viewport.Width).Render(line)
 			sb.WriteString(styled + "\n")
 		} else {
@@ -279,19 +185,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	m.viewport.SetContent(sb.String())
 
-	// Keep cursor in view (simple approach: basic scroll)
-	// For proper scrolling with viewport and variable height items it's complex,
-	// but here lines are fixed height (1 line).
-	// Viewport handles content, but we need to set the Y offset to make sure cursor line is visible.
-	// This is a bit manual with viewport. simpler to just let viewport be a dumb container and we manage the string?
-	// Actually viewport is good for scrolling huge text.
-
-	// Vertical scroll logic for keeping cursor in view
+	// Vertical scroll logic
 	if m.cursor >= 0 {
-		// Line height is 1.
-		// Viewport height is m.viewport.Height
-		// Current scroll offset is m.viewport.YOffset
-
 		if m.cursor < m.viewport.YOffset {
 			m.viewport.SetYOffset(m.cursor)
 		} else if m.cursor >= m.viewport.YOffset+m.viewport.Height {
@@ -300,6 +195,101 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, cmd
+}
+
+func performSearch(ctx context.Context, query string) tea.Cmd {
+	return func() tea.Msg {
+		if strings.TrimSpace(query) == "" {
+			return searchResultMsg{packages: []Package{}, status: "Ready"}
+		}
+
+		var pkgs []Package
+
+		// APT Search
+		cmdApt := exec.CommandContext(ctx, "apt", "search", "--names-only", strings.ToLower(query))
+		cmdApt.Env = append(cmdApt.Env, "TERM=dumb")
+		outApt, err := cmdApt.Output()
+		if err == nil {
+			pkgs = append(pkgs, parseAptOutput(outApt)...)
+		} else if ctx.Err() != nil {
+			return nil // Cancelled
+		}
+
+		// Snap Search
+		cmdSnap := exec.CommandContext(ctx, "snap", "search", strings.ToLower(query))
+		cmdSnap.Env = append(cmdSnap.Env, "TERM=dumb")
+		outSnap, err := cmdSnap.Output()
+		if err == nil {
+			pkgs = append(pkgs, parseSnapOutput(outSnap)...)
+		} else if ctx.Err() != nil {
+			return nil // Cancelled
+		}
+
+		return searchResultMsg{
+			packages: pkgs,
+			status:   fmt.Sprintf("Found %d packages", len(pkgs)),
+		}
+	}
+}
+
+func parseAptOutput(output []byte) []Package {
+	var pkgs []Package
+	scanner := bufio.NewScanner(bytes.NewReader(output))
+	var currentPkg *Package
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || line == "Sorting... Done" || line == "Full Text Search... Done" {
+			continue
+		}
+		if strings.Contains(line, "/") {
+			if currentPkg != nil {
+				pkgs = append(pkgs, *currentPkg)
+			}
+			parts := strings.Fields(line)
+			if len(parts) < 2 {
+				currentPkg = nil
+				continue
+			}
+			rawName := parts[0]
+			name := strings.Split(rawName, "/")[0]
+			version := parts[1]
+			isInstalled := strings.Contains(line, "[installed")
+			currentPkg = &Package{
+				Name:        name,
+				Version:     version,
+				Manager:     "apt/dpkg",
+				IsInstalled: isInstalled,
+			}
+			pkgs = append(pkgs, *currentPkg)
+		}
+	}
+	if currentPkg != nil {
+		pkgs = append(pkgs, *currentPkg)
+	}
+	return pkgs
+}
+
+func parseSnapOutput(output []byte) []Package {
+	var pkgs []Package
+	scanner := bufio.NewScanner(bytes.NewReader(output))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) < 2 || parts[0] == "Name" { // Skip header too if present
+			continue
+		}
+		pkgs = append(pkgs, Package{
+			Name:        parts[0],
+			Version:     parts[1],
+			Manager:     "snap",
+			IsInstalled: false, // todo check
+		})
+	}
+	return pkgs
 }
 
 func (m model) View() string {
