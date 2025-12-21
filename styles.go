@@ -40,6 +40,5 @@ var (
 
 	// Command Bar styles
 	commandBarStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241")).
-			MarginTop(1)
+			Foreground(lipgloss.Color("241"))
 )
