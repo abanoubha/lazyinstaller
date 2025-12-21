@@ -7,25 +7,20 @@ var (
 	inactiveBorderColor = lipgloss.Color("240")
 
 	// App-wide styles
-	appStyle = lipgloss.NewStyle().Margin(1, 2)
+	appStyle = lipgloss.NewStyle()
 
 	// List styles
 	titleStyle = lipgloss.NewStyle().
 			Background(activeBorderColor).
-			Foreground(lipgloss.Color("230")).
-			Padding(0, 1)
+			Foreground(lipgloss.Color("230"))
 
 	inputBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(activeBorderColor).
-			Padding(0, 1).
-			Padding(0, 1)
+			BorderForeground(activeBorderColor)
 
 	listBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(inactiveBorderColor).
-			Padding(0, 1).
-			Padding(0, 1)
+			BorderForeground(inactiveBorderColor)
 
 	// Navigation styles
 	selectedItemStyle = lipgloss.NewStyle().
@@ -35,8 +30,7 @@ var (
 
 	// Status Bar styles
 	statusBarStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241")).
-			MarginTop(1)
+			Foreground(lipgloss.Color("241"))
 
 	// Command Bar styles
 	commandBarStyle = lipgloss.NewStyle().
