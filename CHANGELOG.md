@@ -8,15 +8,15 @@
 - ui: list of installed packages
 - ui: command bar (hints)
 - feature: supported package managers are:
-    - apt, dpkg, dpkg-query
-    - snap
-    - flatpak
-    - pacman
-    - nix-env
-    - brew (homebrew)
-    - port (macports)
-    - dnf, rpm
-    - guix
+  - apt, dpkg, dpkg-query
+  - snap
+  - flatpak
+  - pacman
+  - nix-env
+  - brew (homebrew)
+  - port (macports)
+  - dnf, rpm
+  - guix
 - status bar (e.g. updating local index...)
 - search for a package with all available package managers
 
