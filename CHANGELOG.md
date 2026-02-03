@@ -25,7 +25,7 @@
 ## next
 
 - fix: if search input field is empty, show all installed packages
-- feature: update/upgrade package
+- feature: update/upgrade package (using Enter similar to INSTALL)
 - feature: `/quit` or `/q` to quit
 - feature: `/help` or `/h` to show help
 - feature: `/selfupdate` to update lazyinstaller
