@@ -36,3 +36,5 @@
 - script to install lazyinstaller
 - script to uninstall lazyinstaller
 - script to build lazyinstaller for different operating systems and architectures
+- show detected system package managers
+- list all supported system package managers
