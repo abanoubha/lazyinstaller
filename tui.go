@@ -147,6 +147,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.status = fmt.Sprintf("%s is already installed.", pkg.Name)
 				}
 			}
+		} else if msg.Type == tea.KeyCtrlX {
+			// Uninstall selected package
+			if m.cursor >= 0 && m.cursor < len(m.filtered) {
+				pkg := m.filtered[m.cursor]
+				if pkg.IsInstalled {
+					m.status = fmt.Sprintf("Uninstalling %s...", pkg.Name)
+					return m, uninstallPackage(pkg)
+				} else {
+					m.status = fmt.Sprintf("%s is not installed.", pkg.Name)
+				}
+			}
 		}
 	}
 
@@ -161,24 +172,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case searchErrorMsg:
 		m.status = "Search failed: " + msg.Error()
-	case installFinishedMsg:
+	case pkgActionMsg:
 		if msg.err != nil {
-			m.status = fmt.Sprintf("Installation failed: %v", msg.err)
+			m.status = fmt.Sprintf("%s failed: %v", strings.Title(msg.action), msg.err)
 		} else {
-			m.status = fmt.Sprintf("Successfully installed %s", msg.pkg.Name)
+			verb := "installed"
+			if msg.action == "uninstall" {
+				verb = "uninstalled"
+			}
+			m.status = fmt.Sprintf("Successfully %s %s", verb, msg.pkg.Name)
+
 			// Update the package status in the list
 			for i, p := range m.packages {
 				if p.Name == msg.pkg.Name && p.Manager == msg.pkg.Manager {
-					m.packages[i].IsInstalled = true
+					if msg.action == "install" {
+						m.packages[i].IsInstalled = true
+					} else {
+						m.packages[i].IsInstalled = false
+					}
 				}
 			}
 			// Also update filtered
 			for i, p := range m.filtered {
 				if p.Name == msg.pkg.Name && p.Manager == msg.pkg.Manager {
-					m.filtered[i].IsInstalled = true
+					if msg.action == "install" {
+						m.filtered[i].IsInstalled = true
+					} else {
+						m.filtered[i].IsInstalled = false
+					}
 				}
 			}
-			// Trigger a re-render/update
 		}
 	}
 
@@ -327,7 +350,7 @@ func (m model) View() string {
 		return "Initializing..."
 	}
 
-	commandBar := commandBarStyle.Render("Arrows: Navigate • Enter: Install • Esc: Quit")
+	commandBar := commandBarStyle.Render("Arrows: Navigate • Enter: Install • Ctrl+X: Uninstall • Esc: Quit")
 
 	statusBar := statusBarStyle.Width(m.width)
 
@@ -359,9 +382,10 @@ func truncate(s string, maxLen int) string {
 	return s[:maxLen-1] + "…"
 }
 
-type installFinishedMsg struct {
-	err error
-	pkg Package
+type pkgActionMsg struct {
+	err    error
+	pkg    Package
+	action string // "install" or "uninstall"
 }
 
 func installPackage(pkg Package) tea.Cmd {
@@ -370,27 +394,49 @@ func installPackage(pkg Package) tea.Cmd {
 	cmds, ok := pm_commands[mgrKey]
 	if !ok {
 		return func() tea.Msg {
-			return installFinishedMsg{
-				err: fmt.Errorf("package manager %s not configured", pkg.Manager),
-				pkg: pkg,
+			return pkgActionMsg{
+				err:    fmt.Errorf("package manager %s not configured", pkg.Manager),
+				pkg:    pkg,
+				action: "install",
 			}
 		}
 	}
 
 	installCmdStr := cmds.Install
+	return executePkgAction(installCmdStr, pkg, "install")
+}
 
-	// if template ends with ".x" or " x" remove "x" and add pkgName
-	if strings.HasSuffix(installCmdStr, ".x") || strings.HasSuffix(installCmdStr, " x") {
-		installCmdStr = strings.TrimSuffix(installCmdStr, "x") + pkg.Name
+func uninstallPackage(pkg Package) tea.Cmd {
+	mgrKey := getManagerKey(pkg.Manager)
+	cmds, ok := pm_commands[mgrKey]
+	if !ok {
+		return func() tea.Msg {
+			return pkgActionMsg{
+				err:    fmt.Errorf("package manager %s not configured", pkg.Manager),
+				pkg:    pkg,
+				action: "uninstall",
+			}
+		}
 	}
 
-	parts := strings.Fields(installCmdStr)
+	uninstallCmdStr := cmds.Uninstall
+	return executePkgAction(uninstallCmdStr, pkg, "uninstall")
+}
+
+func executePkgAction(cmdTemplate string, pkg Package, action string) tea.Cmd {
+	// if template ends with ".x" or " x" remove "x" and add pkgName
+	finalCmd := cmdTemplate
+	if strings.HasSuffix(finalCmd, ".x") || strings.HasSuffix(finalCmd, " x") {
+		finalCmd = strings.TrimSuffix(finalCmd, "x") + pkg.Name
+	}
+
+	parts := strings.Fields(finalCmd)
 	head := parts[0]
 	args := parts[1:]
 
 	c := exec.Command(head, args...)
 	return tea.ExecProcess(c, func(err error) tea.Msg {
-		return installFinishedMsg{err: err, pkg: pkg}
+		return pkgActionMsg{err: err, pkg: pkg, action: action}
 	})
 }
 
