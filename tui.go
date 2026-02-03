@@ -136,6 +136,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Delay slightly? No, immediate is fine with cancellation.
 			cmd = tea.Batch(cmd, performSearch(ctx, query))
 			m.status = "Searching..."
+		} else if msg.Type == tea.KeyEnter {
+			// Install selected package
+			if m.cursor >= 0 && m.cursor < len(m.filtered) {
+				pkg := m.filtered[m.cursor]
+				if !pkg.IsInstalled {
+					m.status = fmt.Sprintf("Installing %s...", pkg.Name)
+					return m, installPackage(pkg)
+				} else {
+					m.status = fmt.Sprintf("%s is already installed.", pkg.Name)
+				}
+			}
 		}
 	}
 
@@ -150,6 +161,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case searchErrorMsg:
 		m.status = "Search failed: " + msg.Error()
+	case installFinishedMsg:
+		if msg.err != nil {
+			m.status = fmt.Sprintf("Installation failed: %v", msg.err)
+		} else {
+			m.status = fmt.Sprintf("Successfully installed %s", msg.pkg.Name)
+			// Update the package status in the list
+			for i, p := range m.packages {
+				if p.Name == msg.pkg.Name && p.Manager == msg.pkg.Manager {
+					m.packages[i].IsInstalled = true
+				}
+			}
+			// Also update filtered
+			for i, p := range m.filtered {
+				if p.Name == msg.pkg.Name && p.Manager == msg.pkg.Manager {
+					m.filtered[i].IsInstalled = true
+				}
+			}
+			// Trigger a re-render/update
+		}
 	}
 
 	// Render the list content
@@ -297,7 +327,7 @@ func (m model) View() string {
 		return "Initializing..."
 	}
 
-	commandBar := commandBarStyle.Render("Arrows: Navigate • Esc: Quit")
+	commandBar := commandBarStyle.Render("Arrows: Navigate • Enter: Install • Esc: Quit")
 
 	statusBar := statusBarStyle.Width(m.width)
 
@@ -327,4 +357,55 @@ func truncate(s string, maxLen int) string {
 		return s[:maxLen]
 	}
 	return s[:maxLen-1] + "…"
+}
+
+type installFinishedMsg struct {
+	err error
+	pkg Package
+}
+
+func installPackage(pkg Package) tea.Cmd {
+	// Find the manager command for this package
+	mgrKey := getManagerKey(pkg.Manager)
+	cmds, ok := pm_commands[mgrKey]
+	if !ok {
+		return func() tea.Msg {
+			return installFinishedMsg{
+				err: fmt.Errorf("package manager %s not configured", pkg.Manager),
+				pkg: pkg,
+			}
+		}
+	}
+
+	installCmdStr := cmds.Install
+
+	// if template ends with ".x" or " x" remove "x" and add pkgName
+	if strings.HasSuffix(installCmdStr, ".x") || strings.HasSuffix(installCmdStr, " x") {
+		installCmdStr = strings.TrimSuffix(installCmdStr, "x") + pkg.Name
+	}
+
+	parts := strings.Fields(installCmdStr)
+	head := parts[0]
+	args := parts[1:]
+
+	c := exec.Command(head, args...)
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		return installFinishedMsg{err: err, pkg: pkg}
+	})
+}
+
+func getManagerKey(rawManager string) string {
+	// Map raw manager strings to keys in pm_commands
+	switch rawManager {
+	case "apt/dpkg":
+		return "apt"
+	case "nix-env", "nix-user":
+		return "nix-env"
+	case "macports":
+		return "port"
+	case "rpm/dnf":
+		return "dnf"
+	default:
+		return rawManager
+	}
 }
