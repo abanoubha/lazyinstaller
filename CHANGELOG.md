@@ -28,3 +28,7 @@
 - feature: update/upgrade package
 - feature: `/quit` or `/q` to quit
 - feature: `/help` or `/h` to show help
+- feature: `/selfupdate` to update lazyinstaller
+- feature: `/selfuninstall` to uninstall lazyinstaller
+- feature: `/version` or `/v` to show version
+- feature: `/up` to list installed packages that can be upgraded
