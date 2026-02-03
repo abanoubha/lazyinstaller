@@ -24,4 +24,7 @@
 
 ## next
 
-- update/upgrade package
+- fix: if search input field is empty, show all installed packages
+- feature: update/upgrade package
+- feature: `/quit` or `/q` to quit
+- feature: `/help` or `/h` to show help
