@@ -33,3 +33,6 @@
 - feature: `/selfuninstall` to uninstall lazyinstaller
 - feature: `/version` or `/v` to show version
 - feature: `/up` to list installed packages that can be upgraded
+- script to install lazyinstaller
+- script to uninstall lazyinstaller
+- script to build lazyinstaller for different operating systems and architectures
