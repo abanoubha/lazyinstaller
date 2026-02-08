@@ -52,9 +52,9 @@ func executeCommand(template string, pkgName string) {
 	}
 }
 
-func main() {
-	const version = "260203"
+const version = "260203"
 
+func main() {
 	if len(os.Args) > 1 {
 		// parse arguments
 		args := os.Args[1:]

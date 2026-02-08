@@ -128,13 +128,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// '/q' (or '/quite') to exit/quit
 		case "/q":
 			return m, tea.Quit
+		case "/v":
+			m.filtered = []Package{
+				{
+					Name:        "lazyinstaller",
+					Manager:     "",
+					Version:     version,
+					IsInstalled: true,
+				},
+			}
 		}
 	}
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		// If it's a key message and NOT navigation/special, it's likely text.
-		if msg.Type == tea.KeyRunes || msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete {
+		if strings.HasPrefix(query, "/") {
+			break
+		} else if msg.Type == tea.KeyRunes || msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete {
 			if m.searchCancel != nil {
 				m.searchCancel()
 			}
