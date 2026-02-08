@@ -123,6 +123,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// But we don't want to re-search if nothing changed.
 	// Since we don't track `lastQuery`, let's just do it if `msg` is likely to have changed text.
 
+	if strings.HasPrefix(query, "/") {
+		switch query {
+		// '/q' (or '/quite') to exit/quit
+		case "/q":
+			return m, tea.Quit
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		// If it's a key message and NOT navigation/special, it's likely text.

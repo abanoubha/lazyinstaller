@@ -22,12 +22,15 @@
 - feature: install package
 - feature: uninstall package
 
+## working on
+
+- feature: `/quit` or `/q` to quit
+
 ## next
 
 - fix: de-duplicate packages when searching. show a package only once.
 - fix: if search input field is empty, show all installed packages
 - feature: update/upgrade package (using Enter similar to INSTALL)
-- feature: `/quit` or `/q` to quit
 - feature: `/help` or `/h` to show help
 - feature: `/selfupdate` to update lazyinstaller
 - feature: `/selfuninstall` to uninstall lazyinstaller
