@@ -115,7 +115,7 @@ func loop(w *app.Window, pms []packageManager, pkgs []Package) error {
 
 func (ui *UI) applyFilters() {
 	var res []Package
-	query := strings.ToLower(ui.SearchInput.Text())
+	query := strings.ToLower(normalizeText(ui.SearchInput.Text()))
 
 	for _, p := range ui.Packages {
 		// 1. PM Filter

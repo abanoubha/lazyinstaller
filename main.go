@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
 )
 
@@ -236,11 +235,4 @@ func isInstalled(pkg string) (bool, string) {
 		return false, ""
 	}
 	return true, path
-}
-
-func validateInput(input string) bool {
-	// Allow a-z, A-Z, 0-9, _, -, @, ., +
-	// Some packages have dots (e.g. python3.8) or plus (g++)
-	match, _ := regexp.MatchString(`^[a-zA-Z0-9_\-@.+]+$`, input)
-	return match
 }
