@@ -1,22 +1,21 @@
 package main
 
 import (
-	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
-
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 type Package struct {
-	Name        string
-	Manager     string
-	Version     string
-	IsInstalled bool
+	Name         string
+	Manager      string
+	Version      string
+	IsInstalled  bool
+	IsUpgradable bool
 }
 
 func executeCommand(template string, pkgName string) {
@@ -179,300 +178,52 @@ func main() {
 	// 	fmt.Printf("'%v' sub-command is not supported.\n", action)
 	// }
 
-	status := ""
+	ctx := context.Background()
 
-	pkgs := []Package{}
+	// Fetch installed packages
+	fmt.Println("Fetching installed packages...")
+	installed := fetchPackages(ctx, pms, "installed")
 
-	scannedPMs := make(map[string]struct{}, len(pms))
+	// Fetch upgradable packages
+	fmt.Println("Fetching upgradable packages...")
+	upgradable := fetchPackages(ctx, pms, "upgradable")
 
-	// Parse packages
-	for _, p := range pms {
-		switch p.Name {
-		case "apt", "dpkg", "dpkg-query":
-			if _, exists := scannedPMs["apt"]; exists {
-				continue
-			}
-
-			scannedPMs["apt"] = struct{}{}
-			scannedPMs["dpkg"] = struct{}{}
-			scannedPMs["dpkg-query"] = struct{}{}
-
-			// 1. Get APT/DPKG packages
-			// Using -W and -f for clean "name,version" output
-			cmdDpkg := exec.Command("dpkg-query", "-W", "-f=${binary:Package},${Version}\n")
-			outDpkg, err := cmdDpkg.Output()
-			if err == nil {
-				scanner := bufio.NewScanner(strings.NewReader(string(outDpkg)))
-				for scanner.Scan() {
-					line := scanner.Text()
-					parts := strings.Split(line, ",")
-					if len(parts) >= 2 {
-						pkgs = append(pkgs, Package{
-							Name:        parts[0],
-							Version:     parts[1],
-							Manager:     "apt/dpkg",
-							IsInstalled: true,
-						})
-					}
-				}
-				status = "Successfully got APT/DPKG packages"
-			} else {
-				status = "Failed to get APT/DPKG packages"
-			}
-		case "snap":
-			if _, exists := scannedPMs[p.Name]; exists {
-				continue
-			}
-			scannedPMs[p.Name] = struct{}{}
-			// 2. Get Snap packages
-			cmdSnap := exec.Command("snap", "list")
-			outSnap, err := cmdSnap.Output()
-			if err == nil {
-				scanner := bufio.NewScanner(strings.NewReader(string(outSnap)))
-				scanner.Scan() // Skip header: "Name  Version  Rev..."
-				for scanner.Scan() {
-					fields := strings.Fields(scanner.Text())
-					if len(fields) >= 2 {
-						pkgs = append(pkgs, Package{
-							Name:        fields[0],
-							Version:     fields[1],
-							Manager:     "snap",
-							IsInstalled: true,
-						})
-					}
-				}
-				status = "Successfully got Snap packages"
-			} else {
-				status = "Failed to get Snap packages"
-			}
-		case "flatpak":
-			if _, exists := scannedPMs[p.Name]; exists {
-				continue
-			}
-			scannedPMs[p.Name] = struct{}{}
-			// 3. Get Flatpak packages
-			// --app limits to applications (hiding runtimes)
-			// --columns formats output
-			cmdFlatpak := exec.Command("flatpak", "list", "--app", "--columns=application,version")
-			outFlatpak, err := cmdFlatpak.Output()
-			if err == nil {
-				scanner := bufio.NewScanner(strings.NewReader(string(outFlatpak)))
-				for scanner.Scan() {
-					fields := strings.Fields(scanner.Text())
-					if len(fields) >= 2 {
-						pkgs = append(pkgs, Package{
-							Name:        fields[0],
-							Version:     fields[1],
-							Manager:     "flatpak",
-							IsInstalled: true,
-						})
-					}
-				}
-				status = "Successfully got Flatpak packages"
-			} else {
-				status = "Failed to get Flatpak packages"
-			}
-		case "pacman":
-			if _, exists := scannedPMs[p.Name]; exists {
-				continue
-			}
-			scannedPMs[p.Name] = struct{}{}
-			// 4. Get Pacman packages (Arch Linux)
-			cmdPacman := exec.Command("pacman", "-Q")
-			outPacman, err := cmdPacman.Output()
-			if err == nil {
-				scanner := bufio.NewScanner(strings.NewReader(string(outPacman)))
-				for scanner.Scan() {
-					// Output format: "name version" (e.g., "firefox 112.0.1-1")
-					fields := strings.Fields(scanner.Text())
-					if len(fields) >= 2 {
-						pkgs = append(pkgs, Package{
-							Name:        fields[0],
-							Version:     fields[1],
-							Manager:     "pacman",
-							IsInstalled: true,
-						})
-					}
-				}
-				status = "Successfully got Pacman packages"
-			} else {
-				status = "Failed to get Pacman packages"
-			}
-		case "nix-env":
-			if _, exists := scannedPMs[p.Name]; exists {
-				continue
-			}
-			scannedPMs[p.Name] = struct{}{}
-			// 5. Get Nix user-profile packages
-			cmdNix := exec.Command("nix-env", "-q")
-			outNix, err := cmdNix.Output()
-			if err == nil {
-				scanner := bufio.NewScanner(strings.NewReader(string(outNix)))
-				for scanner.Scan() {
-					line := scanner.Text()
-					// Nix output format is usually "name-version"
-					// Finding the last hyphen helps separate version from name
-					lastHyphen := strings.LastIndex(line, "-")
-					if lastHyphen != -1 {
-						name := line[:lastHyphen]
-						version := line[lastHyphen+1:]
-
-						// Optional: check if version starts with a digit to confirm split
-						if len(version) > 0 && (version[0] >= '0' && version[0] <= '9') {
-							pkgs = append(pkgs, Package{
-								Name:        name,
-								Version:     version,
-								Manager:     "nix-env",
-								IsInstalled: true,
-							})
-						} else {
-							// Fallback if no clear version number
-							pkgs = append(pkgs, Package{
-								Name:        line,
-								Version:     "unknown",
-								Manager:     "nix-user",
-								IsInstalled: true,
-							})
-						}
-					}
-				}
-				status = "Successfully got Nix packages"
-			} else {
-				status = "Failed to get Nix packages"
-			}
-		case "brew":
-			if _, exists := scannedPMs[p.Name]; exists {
-				continue
-			}
-			scannedPMs[p.Name] = struct{}{}
-			// 6. Get Nix user-profile packages
-			cmd := exec.Command("brew", "list", "--versions")
-			out, err := cmd.Output()
-			if err == nil {
-				scanner := bufio.NewScanner(strings.NewReader(string(out)))
-				for scanner.Scan() {
-					// Output lines: "readline 8.2.1" or "python@3.11 3.11.3"
-					fields := strings.Fields(scanner.Text())
-					if len(fields) >= 2 {
-						pkgs = append(pkgs, Package{
-							Name:        fields[0],
-							Version:     fields[1],
-							Manager:     "brew",
-							IsInstalled: true,
-						})
-					}
-				}
-				status = "Successfully got Homebrew packages"
-			} else {
-				status = "Failed to get Homebrew packages"
-			}
-		case "port":
-			if _, exists := scannedPMs[p.Name]; exists {
-				continue
-			}
-			scannedPMs[p.Name] = struct{}{}
-			// 7. Get MacPorts packages
-			// "active" ensures we only get the currently linked version
-			cmdPort := exec.Command("port", "installed", "active")
-			outPort, err := cmdPort.Output()
-			if err == nil {
-				scanner := bufio.NewScanner(strings.NewReader(string(outPort)))
-				// Skip the first line: "The following ports are currently installed:"
-				if scanner.Scan() {
-					_ = scanner.Text()
-				}
-
-				for scanner.Scan() {
-					line := strings.TrimSpace(scanner.Text())
-					if line == "" {
-						continue
-					}
-
-					// Line format: "name @version_variant (active)"
-					// Example: "curl @8.4.0_0+ssl (active)"
-					parts := strings.Fields(line)
-					if len(parts) >= 2 {
-						name := parts[0]
-						// Version is parts[1], usually starting with '@'
-						version := strings.TrimPrefix(parts[1], "@")
-
-						pkgs = append(pkgs, Package{
-							Name:        name,
-							Version:     version,
-							Manager:     "macports",
-							IsInstalled: true,
-						})
-					}
-				}
-				status = "Successfully got MacPorts packages"
-			} else {
-				status = "Failed to get MacPorts packages"
-			}
-		case "dnf", "rpm":
-			if _, exists := scannedPMs["dnf"]; exists {
-				continue
-			}
-			scannedPMs["dnf"] = struct{}{}
-			scannedPMs["rpm"] = struct{}{}
-			// 8. Get RPM packages (Direct DB access)
-			// Use --qf to output "name version-release" directly
-			cmdRpm := exec.Command("rpm", "-qa", "--qf", "%{NAME} %{VERSION}-%{RELEASE}\n")
-			outRpm, err := cmdRpm.Output()
-			if err == nil {
-				scanner := bufio.NewScanner(strings.NewReader(string(outRpm)))
-				for scanner.Scan() {
-					line := scanner.Text()
-					parts := strings.Fields(line)
-					if len(parts) >= 2 {
-						pkgs = append(pkgs, Package{
-							Name:        parts[0],
-							Version:     parts[1],
-							Manager:     "rpm/dnf",
-							IsInstalled: true,
-						})
-					}
-				}
-				status = "Successfully got RPM packages"
-			} else {
-				status = "Failed to get RPM packages"
-			}
-		case "guix":
-			if _, exists := scannedPMs[p.Name]; exists {
-				continue
-			}
-			scannedPMs[p.Name] = struct{}{}
-			// 9. Get Guix packages
-			cmdGuix := exec.Command("guix", "package", "-I")
-			outGuix, err := cmdGuix.Output()
-			if err == nil {
-				scanner := bufio.NewScanner(strings.NewReader(string(outGuix)))
-				for scanner.Scan() {
-					line := scanner.Text()
-					parts := strings.Fields(line)
-					if len(parts) >= 2 {
-						pkgs = append(pkgs, Package{
-							Name:        parts[0],
-							Version:     parts[1],
-							Manager:     "guix",
-							IsInstalled: true,
-						})
-					}
-				}
-				status = "Successfully got Guix packages"
-			} else {
-				status = "Failed to get Guix packages"
-			}
-		default:
-			status = "Unsupported package manager"
-			continue
+	// Merge logic
+	packageMap := make(map[string]Package)
+	for _, p := range installed {
+		key := p.Manager + "|" + p.Name
+		p.IsInstalled = true
+		packageMap[key] = p
+	}
+	for _, p := range upgradable {
+		key := p.Manager + "|" + p.Name
+		if existing, ok := packageMap[key]; ok {
+			existing.IsUpgradable = true
+			// existing.Version is currently installed. Do we want to show new version?
+			// Maybe add NewVersion field? For now, keep installed version
+			// but mark as upgradable.
+			packageMap[key] = existing
+		} else {
+			p.IsUpgradable = true
+			p.IsInstalled = false // It's an update candidate, maybe not installed?
+			// Usually update available implies base is installed.
+			// But duplicate names might exist?
+			// If 'apt list --upgradable' returns 'foo 2.0', and 'apt list --installed' returns 'foo 1.0'.
+			// We might match by name.
+			// But here we key by Manager|Name.
+			// If upgradable returns same Name/Manager, we assume it's the update for the installed one.
+			// We should probably mark the INSTALLED one as upgradable.
+			packageMap[key] = p
 		}
 	}
 
-	p := tea.NewProgram(initialModel(pkgs, status), tea.WithAltScreen())
-	if _, err := p.Run(); err != nil {
-		fmt.Printf("Alas, there's been an error: %v", err)
-		os.Exit(1)
+	var pkgs []Package
+	for _, p := range packageMap {
+		pkgs = append(pkgs, p)
 	}
+
+	// Launch GUI
+	runGUI(pms, pkgs)
 }
 
 func printUsage(version string) {
